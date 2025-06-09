@@ -43,12 +43,16 @@ app.use(session({
 app.use('/api/dashboard', require('./routes/dashboardRoutes'));
 
 // Define API Routes
-app.use('/api/kpis', require('./routes/kpiRoutes'));
+app.use('/api/kpis', require('./routes/kpiManagerRoutes'));
 app.use('/api', require('./routes/userRoutes')); 
 
 // Load staff KPI routes
 const kpiStaffRoutes = require("./routes/kpiStaffRoutes");
 app.use("/kpi", kpiStaffRoutes);
+
+// Load manager KPI routes
+const kpiManagerRoutes = require("./routes/kpiManagerRoutes");
+app.use("/manage", kpiManagerRoutes);
 
 app.get("/", (req, res) => {
   res.redirect("/login");
