@@ -3,19 +3,30 @@ const express = require('express');
 const router = express.Router();
 const Kpi = require('../models/kpi');
 
-// HTML View Route (Most Specific)
-router.get("/view", kpiController.viewManagerKpisHtml);
+// 1. Specific HTML views first
+router.get('/view', kpiController.viewManagerKpisHtml);
+router.get('/assign', kpiController.viewManagerAssignKpiHtml);
 
-// API Endpoint for Manager's KPI Data (More Specific than ':id')
-router.get("/kpis-data", kpiController.getManagerKpisData); // This is what the frontend should call
+// 2. OR serve file manually like this (if you're not using EJS or a template engine)
+const path = require('path');
 
-// CRUD Routes for KPIs (Order: GET all, then GET by ID, POST, PUT, DELETE)
-router.get('/', kpiController.getKpis); // Get all KPIs with filters
-router.post('/', kpiController.createKpi); // POST new KPI
+router.get('/manager-assign-kpi.html', (req, res) => {
+  res.sendFile(path.join(__dirname, '../frontend/pages/manager-assign-kpi.html'));
+});
 
-// Specific KPI by ID routes (These must come after '/view' and '/kpis-data')
-router.get('/:id', kpiController.getKpiById); // GET KPI by ID
-router.put('/:id', kpiController.updateKpi); // UPDATE KPI by ID
-router.delete('/:id', kpiController.deleteKpi); // DELETE KPI by ID
+
+// 3. Specific API endpoint
+router.get('/kpis-data', kpiController.getManagerKpisData);
+
+// 4. General CRUD endpoints
+router.get('/', kpiController.getKpis);
+router.post('/', kpiController.createKpi);
+
+
+
+// 5. Dynamic :id routes should always come last
+router.get('/:id', kpiController.getKpiById);
+router.put('/:id', kpiController.updateKpi);
+router.delete('/:id', kpiController.deleteKpi);
 
 module.exports = router;

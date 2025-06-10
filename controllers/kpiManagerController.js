@@ -33,6 +33,48 @@ exports.viewManagerKpisHtml = async (req, res) => {
   }
 };
 
+exports.viewManagerAssignKpiHtml = async (req, res) => {
+  try {
+    // Check if user is logged in
+    // Assuming 'req.session.user' is how you track authenticated users.
+    if (!req.session.user) {
+      // Redirect to login page if not authenticated
+      return res.redirect("/login");
+    }
+
+    // Construct the file path to the manager-assign-kpi.html file.
+    // It's assumed that this controller file is in 'controllers' directory
+    // and 'manager-assign-kpi.html' is in 'frontend/pages'.
+    const filePath = path.join(
+      __dirname,
+      "..", // Go up from 'controllers' to the project root
+      "frontend",
+      "pages",
+      "manager-assign-kpi.html"
+    );
+
+    // Check if the file exists and is accessible.
+    // This helps catch file not found errors before attempting to send it.
+    await fs.access(filePath);
+
+    // Send the HTML file to the client.
+    res.sendFile(filePath);
+  } catch (err) {
+    // Log the error for debugging purposes.
+    console.error("Error in viewManagerAssignKpiHtml:", err);
+
+    // Handle specific error codes, like file not found.
+    if (err.code === "ENOENT") {
+      return res.status(404).send("Manager Assign KPI page not found.");
+    }
+
+    // Handle any other server errors.
+    res.status(500).send("Server Error loading Manager Assign KPI view.");
+  }
+};
+
+
+
 // --- NEW API ENDPOINT FOR DATA ---
 exports.getManagerKpisData = async (req, res) => {
   try {
@@ -380,33 +422,42 @@ exports.updateKpi = async (req, res) => {
     if (approvalstat) kpi.approvalstat = approvalstat;
     if (evidence) kpi.evidence = evidence; // Assuming evidence is an array of strings
 
-    await kpi.save();
+        await kpi.save();
     res.json(kpi);
   } catch (err) {
     console.error(err.message);
-    if (err.kind === 'ObjectId') {
-      return res.status(400).json({ msg: 'KPI not found (Invalid ID format)' });
+    if (err.name === 'ValidationError') {
+      let errors = {};
+      Object.keys(err.errors).forEach((key) => {
+        errors[key] = err.errors[key].message;
+      });
+      return res.status(400).json({ msg: 'Validation Error', errors });
     }
     res.status(500).send('Server Error');
   }
 };
 
+
 // @route   DELETE /api/kpis/:id
 // @desc    Delete a KPI by ID
 // @access  Manager
+// @route   DELETE /api/kpis/:id
+// @desc    Delete a KPI
+// @access  Public
 exports.deleteKpi = async (req, res) => {
   try {
-    const kpi = await Kpi.findByIdAndDelete(req.params.id); // Use findByIdAndDelete for simplicity
+    const kpi = await Kpi.findById(req.params.id);
 
     if (!kpi) {
       return res.status(404).json({ msg: 'KPI not found' });
     }
 
+    await kpi.remove();
     res.json({ msg: 'KPI removed' });
   } catch (err) {
     console.error(err.message);
     if (err.kind === 'ObjectId') {
-      return res.status(400).json({ msg: 'KPI not found (Invalid ID format)' });
+      return res.status(400).json({ msg: 'Invalid KPI ID' });
     }
     res.status(500).send('Server Error');
   }

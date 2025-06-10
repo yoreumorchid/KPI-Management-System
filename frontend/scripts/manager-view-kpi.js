@@ -114,7 +114,7 @@ function renderCards(kpis) {
             </div>
           </div>
           <div class="mt-3 d-flex align-items-center">
-            ${kpi.approvalstat === "Pending Approval"
+            ${kpi.approvalstat === "Pending"
               ? `<a href="manager-view-evidence.html?id=${kpi._id}" class="btn btn-sm btn-outline-primary me-auto">Review</a>`
               : `<span class="me-auto"></span>`
             }
