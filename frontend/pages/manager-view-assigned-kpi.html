@@ -6,19 +6,16 @@
     <title>Assigned KPIs</title>
     <link rel="icon" href="../assets/images/logo.png" />
 
-    <!-- Bootstrap 5 CSS -->
     <link
       href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.5/dist/css/bootstrap.min.css"
       rel="stylesheet"
     />
 
-    <!-- FontAwesome for icons -->
     <link
       href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.1/css/all.min.css"
       rel="stylesheet"
     />
 
-    <!-- Google Fonts -->
     <link
       href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;600;700&display=swap"
       rel="stylesheet"
@@ -28,7 +25,6 @@
       rel="stylesheet"
     />
 
-    <!-- External CSS -->
     <link rel="stylesheet" href="../styles/style.css" />
   </head>
 
@@ -39,7 +35,6 @@
 
     <div class="container-fluid">
       <div class="row">
-        <!-- Sidebar -->
         <nav class="d-md-block sidebar" id="sidebarMenu">
           <div class="sidebar-sticky p-3">
             <img
@@ -49,34 +44,34 @@
               style="max-width: 120px"
             />
             <ul class="nav flex-column" id="sidebarLinks">
-              <!-- Menu items will be dynamically inserted here -->
-            </ul>
+              </ul>
           </div>
         </nav>
 
-        <!-- Main Content -->
         <main class="col-12 col-md-10 px-4" id="main-content">
           <div class="mt-4">
             <h1 class="mb-3">View Assigned KPIs</h1>
             <a
-              href="manager-assign-kpi.html"
+              href="/manage/assign"
               class="btn btn-teal btn-lg mb-4"
               title="Assign New KPI"
             >
               Assign New KPI
             </a>
-            <button id="BTN-RESET"></button>
+            <button class="btn btn-secondary mb-4" id="BTN-RESET">Reset Filters</button>
           </div>
 
-          <!-- Filters -->
-          <div class="row g-3 mb-4 filter-boxes"> <div class="col-md-4">
+          <div class="row g-3 mb-4 filter-boxes">
+            <div class="col-md-4">
               <select id="filterStaff" class="form-select fs-5">
-                <option value="">All Staff</option> </select>
+                <option value="">All Staff</option>
+              </select>
             </div>
 
             <div class="col-md-4">
               <select id="filterDepartment" class="form-select fs-5">
-                <option value="">All Departments</option> </select>
+                <option value="">All Departments</option>
+              </select>
             </div>
 
             <div class="col-md-4">
@@ -87,184 +82,238 @@
                 <option value="Rejected">Rejected</option>
               </select>
             </div>
-          </div> <div class="row" id="kpiCardsContainer">
           </div>
+          <div class="row" id="kpiCardsContainer">
+            </div>
         </main>
       </div>
     </div>
 
     <div id="sidebarOverlay" class="sidebar-overlay"></div>
 
-    <!-- External JS -->
     <script type="module" src="../scripts/render-sidebar.js"></script>
+
     <script>
-      // Remove or comment out: import { sampleKpis, sampleStaff, sampleDepartments } from './sample-data.js';
+      document.addEventListener("DOMContentLoaded", async () => {
+        const kpiCardsContainer = document.getElementById("kpiCardsContainer");
+        const filterStaffSelect = document.getElementById("filterStaff");
+        const filterDepartmentSelect = document.getElementById("filterDepartment");
+        const filterStatusSelect = document.getElementById("filterStatus");
 
-document.addEventListener("DOMContentLoaded", async () => {
-  const kpiCardsContainer = document.getElementById("kpiCardsContainer");
-  const filterStaffSelect = document.getElementById("filterStaff");
-  const filterDepartmentSelect = document.getElementById("filterDepartment");
-  const filterStatusSelect = document.getElementById("filterStatus");
+        let allKpis = []; // Store the full list of KPIs fetched initially
+        let allStaff = []; // Store the full list of staff fetched initially
+        let allDepartments = []; // Store the full list of departments fetched initially
 
-  let allKpis = []; // Store the full list of KPIs
-  let allStaff = []; // Store the full list of staff
-  let allDepartments = []; // Store the full list of departments
+        // Function to fetch all necessary data from the server
+        async function fetchInitialKpiData() {
+          try {
+            // This API call fetches KPIs, Staff, and Departments in one go
+            const response = await fetch("/api/kpis/kpis-data");
+            if (!response.ok) {
+              if (response.status === 401) {
+                // If unauthorized, redirect to login page
+                window.location.href = "/login";
+                return;
+              }
+              throw new Error(`HTTP error! status: ${response.status}`);
+            }
+            const data = await response.json();
+            allKpis = data.kpis;
+            allStaff = data.staff;
+            allDepartments = data.departments;
 
-  // Function to fetch data from the server
-  async function fetchKpiData() {
-    try {
-      const response = await fetch("/manage/kpis-data"); // Call your new API endpoint
-      if (!response.ok) {
-        if (response.status === 401) {
-          window.location.href = "/login"; // Redirect to login if unauthorized
-          return;
-        }
-        throw new Error(`HTTP error! status: ${response.status}`);
-      }
-      const data = await response.json();
-      allKpis = data.kpis;
-      allStaff = data.staff;
-      allDepartments = data.departments;
-
-      renderFilters();
-      renderKpiCards(allKpis); // Initial render with all KPIs
-    } catch (error) {
-      console.error("Error fetching KPI data:", error);
-      kpiCardsContainer.innerHTML =
-        '<p class="text-danger">Failed to load KPIs. Please try again later.</p>';
-    }
-  }
-
-  // Function to render filter options
-  function renderFilters() {
-    // Populate Staff filter
-    filterStaffSelect.innerHTML = '<option value="">All Staff</option>';
-    allStaff.forEach((staffMember) => {
-      const option = document.createElement("option");
-      option.value = staffMember._id; // Assuming staffMember._id is the user ID
-      option.textContent = staffMember.name;
-      filterStaffSelect.appendChild(option);
-    });
-
-    // Populate Department filter
-    filterDepartmentSelect.innerHTML = '<option value="">All Departments</option>';
-    allDepartments.forEach((department) => {
-      const option = document.createElement("option");
-      option.value = department;
-      option.textContent = department;
-      filterDepartmentSelect.appendChild(option);
-    });
-  }
-
-  // Function to render KPI cards
-  function renderKpiCards(kpisToRender) {
-    kpiCardsContainer.innerHTML = ""; // Clear existing cards
-    if (kpisToRender.length === 0) {
-      kpiCardsContainer.innerHTML = '<p class="col-12">No KPIs found matching your criteria.</p>';
-      return;
-    }
-
-    kpisToRender.forEach((kpi) => {
-      const cardHtml = `
-            <div class="col-md-6 col-lg-4 mb-4">
-                <div class="card shadow-sm h-100">
-                    <div class="card-body">
-                        <h5 class="card-title text-primary">${kpi.title}</h5>
-                        <h6 class="card-subtitle mb-2 text-muted">Assigned to: ${kpi.assignedTo ? kpi.assignedTo.name : 'N/A'} (${kpi.assignedTo ? kpi.assignedTo.department : 'N/A'})</h6>
-                        <p class="card-text"><strong>Description:</strong> ${kpi.description}</p>
-                        <p class="card-text"><strong>Target:</strong> ${kpi.target}</p>
-                        <p class="card-text"><strong>Due Date:</strong> ${new Date(kpi.dueDate).toLocaleDateString()}</p>
-                        <p class="card-text"><strong>Status:</strong> <span class="badge ${getStatusBadgeClass(kpi.status)}">${kpi.status}</span></p>
-                        <p class="card-text"><small class="text-muted">Assigned by: ${kpi.assignedBy ? kpi.assignedBy.name : 'N/A'}</small></p>
-                        <div class="d-flex justify-content-end">
-                            <a href="/manager/edit-kpi/${kpi._id}" class="btn btn-sm btn-outline-primary me-2">Edit</a>
-                            <button class="btn btn-sm btn-outline-danger" data-kpi-id="${kpi._id}">Delete</button>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        `;
-      kpiCardsContainer.insertAdjacentHTML("beforeend", cardHtml);
-    });
-  }
-
-  // Helper function for status badge class
-  function getStatusBadgeClass(status) {
-    switch (status) {
-      case "Pending":
-        return "bg-warning";
-      case "Approved":
-        return "bg-success";
-      case "Rejected":
-        return "bg-danger";
-      default:
-        return "bg-secondary";
-    }
-  }
-
-  // Apply filters function
-  function applyFilters() {
-    const selectedStaffId = filterStaffSelect.value;
-    const selectedDepartment = filterDepartmentSelect.value;
-    const selectedStatus = filterStatusSelect.value;
-
-    let filteredKpis = allKpis;
-
-    if (selectedStaffId) {
-      filteredKpis = filteredKpis.filter(
-        (kpi) => kpi.assignedTo && kpi.assignedTo._id === selectedStaffId
-      );
-    }
-
-    if (selectedDepartment) {
-      filteredKpis = filteredKpis.filter(
-        (kpi) => kpi.assignedTo && kpi.assignedTo.department === selectedDepartment
-      );
-    }
-
-    if (selectedStatus) {
-      filteredKpis = filteredKpis.filter((kpi) => kpi.status === selectedStatus);
-    }
-
-    renderKpiCards(filteredKpis);
-  }
-
-  // Event listeners for filters
-  filterStaffSelect.addEventListener("change", applyFilters);
-  filterDepartmentSelect.addEventListener("change", applyFilters);
-  filterStatusSelect.addEventListener("change", applyFilters);
-
-  // Initial data fetch when the page loads
-  fetchKpiData();
-
-  // Handle the reset button if it's meant to clear filters
-  document.getElementById("BTN-RESET").addEventListener("click", () => {
-    filterStaffSelect.value = "";
-    filterDepartmentSelect.value = "";
-    filterStatusSelect.value = "";
-    applyFilters(); // Re-apply filters after clearing
-  });
-
-  // Event delegation for delete buttons (assuming you'll implement deletion)
-  kpiCardsContainer.addEventListener("click", async (event) => {
-    if (event.target.classList.contains("btn-outline-danger")) {
-      const kpiId = event.target.dataset.kpiId;
-      if (confirm("Are you sure you want to delete this KPI?")) {
-        try {
-          const response = await fetch(`/api/kpis/${kpiId}`, { method: 'DELETE' });
-          if (!response.ok) {
-            throw new Error('Failed to delete KPI');
+            // Populate filters and render cards with initial data
+            populateFilters();
+            renderKpiCards(allKpis);
+          } catch (error) {
+            console.error("Error fetching initial KPI data:", error);
+            kpiCardsContainer.innerHTML =
+              '<p class="col-12 text-danger">Failed to load KPIs. Please check your backend server and network connection.</p>';
           }
-          await fetchKpiData(); // Re-fetch and re-render after deletion
-        } catch (error) {
-          console.error("Error deleting KPI:", error);
-          alert("Error deleting KPI. Please try again.");
         }
-      }
-    }
-  });
-});
+
+        // Function to fetch KPIs based on filters (used when filters change)
+        async function fetchFilteredKpis(filters = {}) {
+          let url = "/api/kpis"; // Use the main API endpoint for filtered results
+          const params = new URLSearchParams();
+
+          if (filters.staffName) {
+            params.append("staffName", filters.staffName);
+          }
+          if (filters.department) {
+            params.append("department", filters.department);
+          }
+          if (filters.status) { // This corresponds to 'approvalstat' on backend
+            params.append("status", filters.status);
+          }
+
+          if (params.toString()) {
+            url += `?${params.toString()}`;
+          }
+
+          try {
+            const response = await fetch(url);
+            if (!response.ok) {
+              throw new Error(`HTTP error! status: ${response.status}`);
+            }
+            const filteredData = await response.json();
+            renderKpiCards(filteredData);
+          } catch (error) {
+            console.error("Error fetching filtered KPIs:", error);
+            kpiCardsContainer.innerHTML = `
+              <div class="col-12 text-center mt-4">
+                <p class="text-danger">Failed to load filtered KPIs. Please try again later.</p>
+              </div>
+            `;
+          }
+        }
+
+
+        // Function to populate filter options
+        function populateFilters() {
+          // Populate Staff filter
+          filterStaffSelect.innerHTML = '<option value="">All Staff</option>';
+          allStaff.forEach((staffMember) => {
+            const option = document.createElement("option");
+            option.value = staffMember._id; // Value should be the staff ID for backend filtering
+            option.textContent = staffMember.name;
+            filterStaffSelect.appendChild(option);
+          });
+
+          // Populate Department filter
+          filterDepartmentSelect.innerHTML = '<option value="">All Departments</option>';
+          allDepartments.forEach((department) => {
+            const option = document.createElement("option");
+            option.value = department;
+            option.textContent = department;
+            filterDepartmentSelect.appendChild(option);
+          });
+        }
+
+        // Function to render KPI cards
+        function renderKpiCards(kpisToRender) {
+          kpiCardsContainer.innerHTML = ""; // Clear existing cards
+          if (kpisToRender.length === 0) {
+            kpiCardsContainer.innerHTML = '<p class="col-12">No KPIs found matching your criteria.</p>';
+            return;
+          }
+
+          kpisToRender.forEach((kpi) => {
+            // Determine progress text and percentage based on progressNumber and targetValue
+            let progressText = "";
+            let progressPercentage = 0;
+            if (kpi.progressNumber === kpi.targetValue) {
+                progressText = "Completed";
+                progressPercentage = 100;
+            } else if (kpi.progressNumber > 0 && kpi.progressNumber < kpi.targetValue) {
+                progressText = "In Progress";
+                progressPercentage = (kpi.progressNumber / kpi.targetValue) * 100;
+            } else if (kpi.progressNumber === 0) {
+                progressText = "Not Started";
+            }
+            progressPercentage = Math.round(progressPercentage);
+
+
+            const cardHtml = `
+              <div class="col-md-6 col-lg-4 mb-4">
+                  <div class="card shadow-sm h-100">
+                      <div class="card-body d-flex flex-column justify-content-between">
+                          <div>
+                              <h5 class="card-title">
+                                  <a href="/manage/kpidetail?id=${kpi._id}" class="text-decoration-none text-primary">
+                                      ${kpi.title}
+                                  </a>
+                              </h5>
+                              <p class="card-text"><strong>Description:</strong> ${kpi.description}</p>
+                              <p class="card-text"><strong>Staff:</strong> ${kpi.assignedTo ? kpi.assignedTo.name : 'Unassigned'}</p>
+                              <p class="card-text"><strong>Department:</strong> ${kpi.assignedTo ? kpi.assignedTo.department : 'N/A'}</p>
+                              <p class="card-text"><strong>Target:</strong> ${kpi.targetValue}</p>
+                              <p class="card-text"><strong>CurrentProgress:</strong> ${kpi.progressNumber}</p>
+                              <p class="card-text"><strong>Due Date:</strong> ${new Date(kpi.dueDate).toLocaleDateString()}</p>
+                              <p class="card-text"><strong>Indicators:</strong> ${kpi.target}</p>
+                              <p class="card-text"><strong>Progress:</strong> ${progressText}</p>
+                              <div class="progress" style="height: 20px;">
+                                  <div class="progress-bar" role="progressbar" aria-valuenow="${progressPercentage}" aria-valuemin="0" aria-valuemax="100" style="width: ${progressPercentage}%;"></div>
+                              </div>
+                          </div>
+                          <div class="mt-3 d-flex align-items-center">
+                              ${kpi.approvalstat === "Pending"
+                                ? `<a href="/manage/view-evidence?id=${kpi._id}" class="btn btn-sm btn-outline-primary me-auto">Review</a>` // Assuming you have a /manage/view-evidence route
+                                : `<span class="me-auto"></span>`
+                              }
+                              <span class="badge bg-${getStatusBadgeClass(kpi.approvalstat)} ms-2">${kpi.approvalstat}</span>
+                          </div>
+                      </div>
+                  </div>
+              </div>
+            `;
+            kpiCardsContainer.insertAdjacentHTML("beforeend", cardHtml);
+          });
+        }
+
+        // Helper function for status badge class (for approvalstat)
+        function getStatusBadgeClass(approvalstat) {
+          switch (approvalstat?.toLowerCase()) {
+            case "approved":
+              return "success";
+            case "rejected":
+              return "danger";
+            case "pending":
+              return "warning text-dark";
+            case "no new progress":
+              return "secondary";
+            default:
+              return "secondary";
+          }
+        }
+
+        // Apply filters function (triggers API call)
+        function applyFilters() {
+          const filters = {
+            staffName: filterStaffSelect.value,
+            department: filterDepartmentSelect.value,
+            status: filterStatusSelect.value, // This filters backend's approvalstat
+          };
+          fetchFilteredKpis(filters); // Use the function that calls the API with filters
+        }
+
+        // Event listeners for filters
+        filterStaffSelect.addEventListener("change", applyFilters);
+        filterDepartmentSelect.addEventListener("change", applyFilters);
+        filterStatusSelect.addEventListener("change", applyFilters);
+
+        // Event listener for the Reset Filters button
+        document.getElementById("BTN-RESET").addEventListener("click", () => {
+          filterStaffSelect.value = "";
+          filterDepartmentSelect.value = "";
+          filterStatusSelect.value = "";
+          applyFilters(); // Re-apply filters to show all KPIs
+        });
+
+        // Event delegation for delete buttons
+        kpiCardsContainer.addEventListener("click", async (event) => {
+          if (event.target.classList.contains("btn-outline-danger")) {
+            const kpiId = event.target.dataset.kpiId;
+            if (confirm("Are you sure you want to delete this KPI? This action cannot be undone.")) {
+              try {
+                const response = await fetch(`/api/kpis/${kpiId}`, { method: 'DELETE' });
+                if (!response.ok) {
+                  const errorData = await response.json();
+                  throw new Error(errorData.msg || 'Failed to delete KPI');
+                }
+                alert("KPI deleted successfully!");
+                await fetchInitialKpiData(); // Re-fetch all data and re-render after deletion
+              } catch (error) {
+                console.error("Error deleting KPI:", error);
+                alert(`Error deleting KPI: ${error.message}. Please try again.`);
+              }
+            }
+          }
+        });
+
+        // Initial data fetch when the page loads
+        fetchInitialKpiData();
+      });
     </script>
-    <script src="../scripts/manager-view-kpi.js"></script>
-  </body>
+    </body>
 </html>

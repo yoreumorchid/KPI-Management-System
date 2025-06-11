@@ -1,4 +1,4 @@
-// --- DELETED: getStoredKpis function (no longer needed with backend) ---
+ //--- DELETED: getStoredKpis function (no longer needed with backend) ---
 // function getStoredKpis() {
 //   return JSON.parse(localStorage.getItem("kpis")) || [];
 // }

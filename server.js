@@ -42,17 +42,26 @@ app.use(session({
 // Routes
 app.use('/api/dashboard', require('./routes/dashboardRoutes'));
 
+
 // Define API Routes
-app.use('/api/kpis', require('./routes/kpiManagerRoutes'));
+//app.use('/api/kpis', require('./routes/kpiManagerRoutes'));
 app.use('/api', require('./routes/userRoutes')); 
 
+// Load manager KPI routes
+/*const kpiManagerRoutes = require("./routes/kpiManagerRoutes");
+app.use("/manage", kpiManagerRoutes);
+*/
+// Mount HTML View Routes under /manage prefix
+// These routes will explicitly serve your .html files for specific URLs like /manage/view.
+app.use("/manage", require("./routes/kpiViewRoutes"));
+
+// Mount API Routes for KPIs under /api/kpis prefix
+// These routes will handle your backend data requests (JSON).
+app.use('/api/kpis', require('./routes/kpiApiRoutes'));
 // Load staff KPI routes
 const kpiStaffRoutes = require("./routes/kpiStaffRoutes");
 app.use("/kpi", kpiStaffRoutes);
 
-// Load manager KPI routes
-const kpiManagerRoutes = require("./routes/kpiManagerRoutes");
-app.use("/manage", kpiManagerRoutes);
 
 app.get("/", (req, res) => {
   res.redirect("/login");

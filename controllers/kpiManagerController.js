@@ -1,15 +1,19 @@
-// controllers/kpiController.js
 const Kpi = require('../models/kpi');
 const User = require('../models/user');
-const mongoose = require('mongoose'); // <--- Ensure this line is present at the top
+const mongoose = require('mongoose');
 const path = require('path');
 const fs = require('fs').promises; // Use promises version for async/await
 
-// ... (other functions like getKpiById, createKpi, updateKpi, deleteKpi) ...
+// --- HTML View Rendering Functions ---
 
+/**
+ * @route   GET /manage/view
+ * @desc    Renders the manager-view-assigned-kpi.html page.
+ * @access  Private (Manager)
+ */
 exports.viewManagerKpisHtml = async (req, res) => {
   try {
-    // Check if user is logged in
+    // Check if user is logged in (Assuming req.session.user is set upon login)
     if (!req.session.user) {
       return res.redirect("/login"); // Redirect to login if not authenticated
     }
@@ -25,57 +29,78 @@ exports.viewManagerKpisHtml = async (req, res) => {
     await fs.access(filePath); // Check if file exists
     res.sendFile(filePath); // Send the HTML file
   } catch (err) {
-    console.error("Error in viewManagerKpisHtml:", err); // Corrected function name
+    console.error("Error in viewManagerKpisHtml:", err);
     if (err.code === "ENOENT") {
-      return res.status(404).send("View page not found.");
+      return res.status(404).send("Manager View KPI page not found.");
     }
     res.status(500).send("Server Error loading KPI view.");
   }
 };
 
+/**
+ * @route   GET /manage/assign
+ * @desc    Renders the manager-assign-kpi.html page.
+ * @access  Private (Manager)
+ */
 exports.viewManagerAssignKpiHtml = async (req, res) => {
   try {
     // Check if user is logged in
-    // Assuming 'req.session.user' is how you track authenticated users.
     if (!req.session.user) {
-      // Redirect to login page if not authenticated
       return res.redirect("/login");
     }
 
-    // Construct the file path to the manager-assign-kpi.html file.
-    // It's assumed that this controller file is in 'controllers' directory
-    // and 'manager-assign-kpi.html' is in 'frontend/pages'.
     const filePath = path.join(
       __dirname,
-      "..", // Go up from 'controllers' to the project root
+      "..",
       "frontend",
       "pages",
       "manager-assign-kpi.html"
     );
 
-    // Check if the file exists and is accessible.
-    // This helps catch file not found errors before attempting to send it.
     await fs.access(filePath);
-
-    // Send the HTML file to the client.
     res.sendFile(filePath);
   } catch (err) {
-    // Log the error for debugging purposes.
     console.error("Error in viewManagerAssignKpiHtml:", err);
-
-    // Handle specific error codes, like file not found.
     if (err.code === "ENOENT") {
       return res.status(404).send("Manager Assign KPI page not found.");
     }
-
-    // Handle any other server errors.
     res.status(500).send("Server Error loading Manager Assign KPI view.");
   }
 };
 
+exports.viewManagerKpiDetailHtml = async (req, res) => {
+  try {
+    if (!req.session.user) {
+      return res.redirect("/login");
+    }
 
+    const filePath = path.join(
+      __dirname,
+      "..",
+      "frontend",
+      "pages",
+      "manager-kpi-detail.html"
+    );
 
-// --- NEW API ENDPOINT FOR DATA ---
+    await fs.access(filePath);
+    res.sendFile(filePath);
+  } catch (err) {
+    console.error("Error in viewManagerKpiDetailHtml:", err);
+    if (err.code === "ENOENT") {
+      return res.status(404).send("Manager KPI Detail page not found.");
+    }
+    res.status(500).send("Server Error loading Manager KPI Detail view.");
+  }
+};
+
+// --- API Endpoints for Data ---
+
+/**
+ * @route   GET /api/kpis/kpis-data (or /manage/kpis-data)
+ * @desc    Get all KPIs assigned to the logged-in manager's staff, and lists of staff/departments.
+ * Used by manager-view-assigned-kpi.html to populate initial data and filters.
+ * @access  Private (Manager)
+ */
 exports.getManagerKpisData = async (req, res) => {
   try {
     if (!req.session.user) {
@@ -84,14 +109,16 @@ exports.getManagerKpisData = async (req, res) => {
 
     const userId = req.session.user._id;
 
-    // Fetch KPIs assigned to the user
-    const kpis = await KPI.find({ assignedTo: userId })
-      .populate("assignedTo", "name department") // Select specific fields for assignedTo
-      .populate("assignedBy", "name") // Select specific fields for assignedBy
+    // Fetch KPIs assigned to staff managed by this user
+    // In a real app, you might filter KPIs by assignedTo: { $in: staffUserIds }
+    // For simplicity, assuming manager can see all KPIs and filters apply.
+    // If a manager only sees KPIs *assigned to staff they manage*, the query should be adjusted.
+    const kpis = await Kpi.find({}) // Fetch all KPIs for now, filters apply later
+      .populate("assignedTo", "name department")
       .lean();
 
     // Fetch staff managed by this user
-    const staff = await User.find({ manager: userId }, "name department").lean(); // Get name and department
+    const staff = await User.find({ manager: userId, role: 'staff' }, "name department").lean();
 
     // Extract unique departments from the fetched staff
     const departments = [
@@ -106,43 +133,42 @@ exports.getManagerKpisData = async (req, res) => {
   }
 };
 
-// @route   GET /api/kpis
-// @desc    Get all KPIs with optional filters (assignedTo (user _id or name), department, status (approvalstat))
-// @access  Public
+
+/**
+ * @route   GET /api/kpis (or /manage/)
+ * @desc    Get all KPIs with optional filters (staffName, department, status/approvalstat).
+ * This is the primary API for the manager-view-assigned-kpi.html's filtering.
+ * @access  Public (or Manager specific if needed for finer control)
+ */
 exports.getKpis = async (req, res) => {
   try {
-    const { staffName, department, status } = req.query;
-    const query = {}; // Initialize the query object
+    const { staffName, department, status } = req.query; // 'status' from frontend refers to approvalstat
+    const query = {};
 
-    // Filter by assignedTo (now handles both ID and Name gracefully)
+    // Filter by assignedTo (handles both User _id and name)
     if (staffName) {
       // Check if the provided staffName is a valid ObjectId format
       if (!mongoose.Types.ObjectId.isValid(staffName)) {
-        // If it's NOT a valid ObjectId, assume it's a staff name string
-        const staffUser = await User.findOne({ name: new RegExp(staffName, 'i') }).select('_id');
+        // If NOT an ObjectId, assume it's a staff name string
+        const staffUser = await User.findOne({ name: new RegExp(staffName, 'i'), role: 'staff' }).select('_id');
         if (staffUser) {
-          query.assignedTo = staffUser._id; // Use the found user's _id
+          query.assignedTo = staffUser._id;
         } else {
-          // If no user found with that name, no KPIs will match
-          return res.json([]);
+          return res.json([]); // No user found with that name, so no KPIs will match
         }
       } else {
-        // If it IS a valid ObjectId, use it directly
+        // If IS a valid ObjectId, use it directly
         query.assignedTo = staffName;
       }
     }
 
-    // Filter by Approval Status (which frontend calls 'status')
+    // Filter by Approval Status (frontend passes this as 'status')
     if (status) {
       query.approvalstat = new RegExp(status, 'i'); // Case-insensitive match for approvalstat
     }
 
-    // --- Start of FIX for 'kpis' declaration ---
-    let kpis; // Declared once with 'let' at the top of the scope
-
     // Handle Department Filter
     if (department) {
-      // Find all users belonging to the specified department
       const departmentUsers = await User.find({ department: new RegExp(department, 'i') }).select('_id');
 
       if (departmentUsers.length === 0) {
@@ -154,41 +180,33 @@ exports.getKpis = async (req, res) => {
       // If assignedTo is already in the query (from staffName filter),
       // we need to check if that specific staff member is in the department.
       if (query.assignedTo) {
-        // query.assignedTo might be an ObjectId, so convert it to string for comparison with array of ObjectIds
-        // Use .some() for checking if query.assignedTo exists in departmentUserIds
-        if (!departmentUserIds.some(id => id.equals(query.assignedTo))) { // .equals() is safer for ObjectIds
+        if (!departmentUserIds.some(id => id.equals(query.assignedTo))) {
           return res.json([]); // Specific staff member is not in the filtered department
         }
-        // If they are, query.assignedTo remains as is (already filtered for that specific staff)
       } else {
         // If no staffName filter, then filter by all KPIs assigned to users in the specified department
         query.assignedTo = { $in: departmentUserIds };
       }
-      // Now, assign value to kpis without 'const' or 'let'
-      kpis = await Kpi.find(query).populate('assignedTo', 'name email department');
-
-    } else {
-      // If no department filter, simply find KPIs based on other filters
-      // Assign value to kpis without 'const' or 'let'
-      kpis = await Kpi.find(query).populate('assignedTo', 'name email department');
     }
-    // --- End of FIX for 'kpis' declaration ---
 
+    const kpis = await Kpi.find(query).populate('assignedTo', 'name email department');
     res.json(kpis);
   } catch (err) {
     console.error(err.message);
     res.status(500).send('Server Error');
   }
 };
-//CRUD PART
 
 
-// @route   GET /api/kpis/:id
-// @desc    Get single KPI by ID
-// @access  Public
+/**
+ * @route   GET /api/kpis/:id (or /manage/:id)
+ * @desc    Get a single KPI by ID. Used by manager-kpi-detail.html.
+ * @access  Public (or Manager specific if needed)
+ */
 exports.getKpiById = async (req, res) => {
   try {
-    const kpi = await Kpi.findById(req.params.id).populate('assignedTo', 'name email department'); // Populate user details
+    // Populate assignedTo to get full staff details
+    const kpi = await Kpi.findById(req.params.id).populate('assignedTo', 'name email department');
     if (!kpi) {
       return res.status(404).json({ msg: 'KPI not found' });
     }
@@ -202,71 +220,69 @@ exports.getKpiById = async (req, res) => {
   }
 };
 
-// @route   POST /api/kpis
-// @desc    Create a new KPI
-// @access  Public
+/**
+ * @route   POST /api/kpis (or /manage/)
+ * @desc    Create a new KPI. Used by manager-assign-kpi.html.
+ * @access  Private (Manager)
+ */
 exports.createKpi = async (req, res) => {
-  const {
-    title,
-    description,
-    target, // From your schema
-    targetValue,
-    progress, // From your schema
-    progressNumber,
-    startDate,
-    dueDate,
-    status, // Maps to schema's 'status' (progress status)
-    approvalstat, // Maps to schema's 'approvalstat'
-    assignedTo // This should be the User's _id
-  } = req.body;
+  // Destructure fields from the request body as sent by manager-assign-kpi.html
+  const { title, description, staffName, targetValue, dueDate, performanceIndicator } = req.body;
 
   try {
+    // 1. Find the assigned staff member by name (case-insensitive)
+    // Ensure the staff member has the 'staff' role
+    const assignedStaff = await User.findOne({ name: new RegExp(staffName, 'i'), role: 'staff' });
+
+    if (!assignedStaff) {
+      return res.status(404).json({ msg: 'Assigned staff member not found. Please ensure the staff name is correct and exists as a staff user.' });
+    }
+
+    // 2. Create the new KPI object
     const newKpi = new Kpi({
       title,
       description,
-      target,
+      target: performanceIndicator, // Map frontend 'performanceIndicator' to backend 'target'
       targetValue,
-      progress,
-      progressNumber,
-      startDate,
-      dueDate,
-      status, // Progress Status (Not Started, In Progress, Completed)
-      approvalstat, // Approval Status (Pending, Approved, Rejected, No New Progress)
-      assignedTo // User's ObjectId
+      dueDate: new Date(dueDate), // Ensure date is correctly parsed
+      assignedTo: assignedStaff._id, // Use the staff's ObjectId
+      status: 'Not Started', // Default progress status for newly assigned KPI
+      progressNumber: 0, // Default progress for new KPI
+      approvalstat: 'Pending', // Default approval status for new KPI
+      // assignedBy: req.session.user._id, // Optional: if you want to track who assigned it
     });
 
+    // 3. Save the KPI to the database
     const kpi = await newKpi.save();
-    res.status(201).json(kpi);
+    res.status(201).json(kpi); // 201 Created
   } catch (err) {
     console.error(err.message);
-    // Add validation error details if available from Mongoose
     if (err.name === 'ValidationError') {
-      let errors = {};
-      Object.keys(err.errors).forEach((key) => {
-        errors[key] = err.errors[key].message;
-      });
-      return res.status(400).json({ msg: 'Validation Error', errors });
+        const messages = Object.values(err.errors).map(val => val.message);
+        return res.status(400).json({ msg: `Validation Error: ${messages.join(', ')}` });
     }
-    res.status(500).send('Server Error');
+    res.status(500).send('Server Error during KPI creation');
   }
 };
 
-// @route   PUT /api/kpis/:id
-// @desc    Update a KPI
-// @access  Public
+/**
+ * @route   PUT /api/kpis/:id (or /manage/:id)
+ * @desc    Update a KPI by ID. Used by manager-kpi-detail.html for editing.
+ * @access  Private (Manager)
+ */
 exports.updateKpi = async (req, res) => {
+  // Destructure all possible fields that could be updated from the frontend
   const {
     title,
     description,
-    target,
+    staffName, // Used to reassign KPI to a different staff
     targetValue,
-    progress,
-    progressNumber,
-    startDate,
     dueDate,
-    status, // Progress status
-    approvalstat, // Approval status
-    assignedTo // Can be updated, but usually doesn't change
+    performanceIndicator, // Maps to 'target' in KPI schema
+    status, // From frontend dropdown, corresponds to 'approvalstat' in schema
+    progressNumber,
+    approvalstat, // Direct update, if explicitly sent
+    evidence // Array of evidence URLs/descriptions
   } = req.body;
 
   try {
@@ -276,18 +292,33 @@ exports.updateKpi = async (req, res) => {
       return res.status(404).json({ msg: 'KPI not found' });
     }
 
-    // Update KPI fields dynamically if they exist in req.body
-    kpi.title = title !== undefined ? title : kpi.title;
-    kpi.description = description !== undefined ? description : kpi.description;
-    kpi.target = target !== undefined ? target : kpi.target;
-    kpi.targetValue = targetValue !== undefined ? targetValue : kpi.targetValue;
-    kpi.progress = progress !== undefined ? progress : kpi.progress;
-    kpi.progressNumber = progressNumber !== undefined ? progressNumber : kpi.progressNumber;
-    kpi.startDate = startDate !== undefined ? startDate : kpi.startDate;
-    kpi.dueDate = dueDate !== undefined ? dueDate : kpi.dueDate;
-    kpi.status = status !== undefined ? status : kpi.status; // Progress status
-    kpi.approvalstat = approvalstat !== undefined ? approvalstat : kpi.approvalstat; // Approval status
-    kpi.assignedTo = assignedTo !== undefined ? assignedTo : kpi.assignedTo;
+    // Update KPI fields if they are provided in the request body
+    if (title !== undefined) kpi.title = title;
+    if (description !== undefined) kpi.description = description;
+    if (targetValue !== undefined) kpi.targetValue = targetValue;
+    if (dueDate !== undefined) kpi.dueDate = new Date(dueDate);
+    if (performanceIndicator !== undefined) kpi.target = performanceIndicator; // Map 'performanceIndicator' to 'target'
+
+    // Frontend manager-kpi-detail's "Status" dropdown updates 'approvalstat'
+    // If the frontend sends 'status' with values like "Pending", "Approved", "Rejected"
+    if (status !== undefined) {
+      kpi.approvalstat = status; // Update approvalstat based on frontend 'status' field
+    }
+    // If frontend sends 'approvalstat' directly, it would override or be redundant.
+    // Keeping this for explicit backend update if desired.
+    if (approvalstat !== undefined) kpi.approvalstat = approvalstat;
+
+    if (typeof progressNumber !== 'undefined') kpi.progressNumber = progressNumber; // Allow 0
+    if (evidence !== undefined) kpi.evidence = evidence; // Assuming evidence is an array of strings
+
+    // If staffName is provided, find the new assignedTo user and update
+    if (staffName !== undefined) {
+      const newAssignedStaff = await User.findOne({ name: new RegExp(staffName, 'i'), role: 'staff' });
+      if (!newAssignedStaff) {
+        return res.status(404).json({ msg: 'New assigned staff member not found. Please ensure the staff name is correct.' });
+      }
+      kpi.assignedTo = newAssignedStaff._id;
+    }
 
     await kpi.save();
     res.json(kpi);
@@ -307,153 +338,22 @@ exports.updateKpi = async (req, res) => {
   }
 };
 
-// @route   DELETE /api/kpis/:id
-// @desc    Delete a KPI
-// @access  Public
+
+/**
+ * @route   DELETE /api/kpis/:id (or /manage/:id)
+ * @desc    Delete a KPI by ID. Used by manager-kpi-detail.html.
+ * @access  Private (Manager)
+ */
 exports.deleteKpi = async (req, res) => {
   try {
-    const kpi = await Kpi.findById(req.params.id);
-    if (!kpi) {
+    // Find and delete the KPI directly
+    const deletedKpi = await Kpi.findByIdAndDelete(req.params.id);
+
+    if (!deletedKpi) {
       return res.status(404).json({ msg: 'KPI not found' });
     }
 
-    await Kpi.deleteOne({ _id: req.params.id });
-    res.json({ msg: 'KPI removed' });
-  } catch (err) {
-    console.error(err.message);
-    if (err.kind === 'ObjectId') {
-      return res.status(400).json({ msg: 'Invalid KPI ID' });
-    }
-    res.status(500).send('Server Error');
-  }
-};
-// --- NEW CRUD Functions for Assign KPI Form ---
-
-// @route   POST /api/kpis
-// @desc    Create a new KPI
-// @access  Manager
-exports.createKpi = async (req, res) => {
-  const { title, description, staffName, targetValue, department, dueDate, performanceIndicator } = req.body;
-
-  try {
-    // 1. Find the assigned staff member by name (case-insensitive)
-    const assignedStaff = await User.findOne({ name: new RegExp(staffName, 'i'), role: 'staff' });
-
-    if (!assignedStaff) {
-      return res.status(404).json({ msg: 'Assigned staff member not found. Please ensure the staff name is correct and exist as a staff user.' });
-    }
-
-    // 2. Create the new KPI object
-    const newKpi = new Kpi({
-      title,
-      description,
-      target: performanceIndicator, // Map frontend 'performanceIndicator' to backend 'target'
-      targetValue,
-      dueDate: new Date(dueDate), // Ensure date is correctly parsed
-      assignedTo: assignedStaff._id, // Use the staff's ObjectId
-      status: 'Not Started', // Default status for newly assigned KPI
-      progressNumber: 0,
-      approvalstat: 'Pending', // Default approval status for new KPI
-      // department: department // No need to store department in KPI directly if referencing User
-    });
-
-    // 3. Save the KPI to the database
-    const kpi = await newKpi.save();
-    res.status(201).json(kpi); // 201 Created
-  } catch (err) {
-    console.error(err.message);
-    if (err.name === 'ValidationError') {
-        const messages = Object.values(err.errors).map(val => val.message);
-        return res.status(400).json({ msg: `Validation Error: ${messages.join(', ')}` });
-    }
-    res.status(500).send('Server Error during KPI creation');
-  }
-};
-
-// @route   GET /api/kpis/:id
-// @desc    Get KPI by ID
-// @access  Public (or Manager/Staff specific if needed)
-exports.getKpiById = async (req, res) => {
-  try {
-    const kpi = await Kpi.findById(req.params.id).populate('assignedTo', 'name email department');
-    if (!kpi) {
-      return res.status(404).json({ msg: 'KPI not found' });
-    }
-    res.json(kpi);
-  } catch (err) {
-    console.error(err.message);
-    if (err.kind === 'ObjectId') { // Handle invalid Object ID format
-      return res.status(400).json({ msg: 'KPI not found (Invalid ID format)' });
-    }
-    res.status(500).send('Server Error');
-  }
-};
-
-// @route   PUT /api/kpis/:id
-// @desc    Update a KPI by ID
-// @access  Manager
-exports.updateKpi = async (req, res) => {
-  const { title, description, staffName, targetValue, dueDate, performanceIndicator, status, progressNumber, approvalstat, evidence } = req.body;
-
-  try {
-    let kpi = await Kpi.findById(req.params.id);
-
-    if (!kpi) {
-      return res.status(404).json({ msg: 'KPI not found' });
-    }
-
-    // If staffName is provided, find the new assignedTo user
-    if (staffName) {
-      const newAssignedStaff = await User.findOne({ name: new RegExp(staffName, 'i'), role: 'staff' });
-      if (!newAssignedStaff) {
-        return res.status(404).json({ msg: 'New assigned staff member not found.' });
-      }
-      kpi.assignedTo = newAssignedStaff._id;
-    }
-
-    // Update fields if they are provided in the request body
-    if (title) kpi.title = title;
-    if (description) kpi.description = description;
-    if (targetValue) kpi.targetValue = targetValue;
-    if (dueDate) kpi.dueDate = new Date(dueDate);
-    if (performanceIndicator) kpi.target = performanceIndicator; // Map back
-    if (status) kpi.status = status;
-    if (typeof progressNumber !== 'undefined') kpi.progressNumber = progressNumber; // Allow 0
-    if (approvalstat) kpi.approvalstat = approvalstat;
-    if (evidence) kpi.evidence = evidence; // Assuming evidence is an array of strings
-
-        await kpi.save();
-    res.json(kpi);
-  } catch (err) {
-    console.error(err.message);
-    if (err.name === 'ValidationError') {
-      let errors = {};
-      Object.keys(err.errors).forEach((key) => {
-        errors[key] = err.errors[key].message;
-      });
-      return res.status(400).json({ msg: 'Validation Error', errors });
-    }
-    res.status(500).send('Server Error');
-  }
-};
-
-
-// @route   DELETE /api/kpis/:id
-// @desc    Delete a KPI by ID
-// @access  Manager
-// @route   DELETE /api/kpis/:id
-// @desc    Delete a KPI
-// @access  Public
-exports.deleteKpi = async (req, res) => {
-  try {
-    const kpi = await Kpi.findById(req.params.id);
-
-    if (!kpi) {
-      return res.status(404).json({ msg: 'KPI not found' });
-    }
-
-    await kpi.remove();
-    res.json({ msg: 'KPI removed' });
+    res.json({ msg: 'KPI removed successfully.' });
   } catch (err) {
     console.error(err.message);
     if (err.kind === 'ObjectId') {
